@@ -1,0 +1,42 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/alarm_model.dart';
+
+class AlarmStorageService {
+  static const _key = 'alarms_v1';
+
+  Future<List<AlarmModel>> loadAlarms() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_key) ?? [];
+    return raw.map((s) => AlarmModel.fromJsonString(s)).toList();
+  }
+
+  Future<void> saveAlarms(List<AlarmModel> alarms) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _key,
+      alarms.map((a) => a.toJsonString()).toList(),
+    );
+  }
+
+  Future<AlarmModel> addAlarm(AlarmModel alarm) async {
+    final alarms = await loadAlarms();
+    alarms.add(alarm);
+    await saveAlarms(alarms);
+    return alarm;
+  }
+
+  Future<void> updateAlarm(AlarmModel updated) async {
+    final alarms = await loadAlarms();
+    final idx = alarms.indexWhere((a) => a.id == updated.id);
+    if (idx >= 0) alarms[idx] = updated;
+    await saveAlarms(alarms);
+  }
+
+  Future<void> deleteAlarm(int id) async {
+    final alarms = await loadAlarms();
+    alarms.removeWhere((a) => a.id == id);
+    await saveAlarms(alarms);
+  }
+
+  int generateId() => DateTime.now().millisecondsSinceEpoch % 100000;
+}
