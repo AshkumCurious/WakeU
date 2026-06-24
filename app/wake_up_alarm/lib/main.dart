@@ -1,5 +1,8 @@
 // lib/main.dart
+import 'dart:async';
+
 import 'package:alarm/alarm.dart';
+import 'package:alarm/utils/alarm_set.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'services/alarm_scheduler_service.dart';
@@ -10,7 +13,6 @@ import 'utils/app_theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Lock to portrait
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -30,6 +32,7 @@ class WakeUpAlarmApp extends StatefulWidget {
 
 class _WakeUpAlarmAppState extends State<WakeUpAlarmApp> {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  StreamSubscription<AlarmSet>? _ringingSubscription;
 
   @override
   void initState() {
@@ -38,11 +41,18 @@ class _WakeUpAlarmAppState extends State<WakeUpAlarmApp> {
     _checkIfAlarmAlreadyRinging();
   }
 
+  @override
+  void dispose() {
+    _ringingSubscription?.cancel();
+    super.dispose();
+  }
+
   void _listenToAlarmRings() {
-    AlarmSchedulerService.alarmStream.listen((alarmSettings) {
+    _ringingSubscription = Alarm.ringing.listen((alarmSet) {
+      if (alarmSet.alarms.isEmpty) return;
       _navigatorKey.currentState?.pushAndRemoveUntil(
         MaterialPageRoute(
-          builder: (_) => RingingScreen(alarmId: alarmSettings.id),
+          builder: (_) => RingingScreen(alarmId: alarmSet.alarms.first.id),
         ),
         (route) => false,
       );
@@ -52,14 +62,11 @@ class _WakeUpAlarmAppState extends State<WakeUpAlarmApp> {
   Future<void> _checkIfAlarmAlreadyRinging() async {
     await Future.delayed(const Duration(milliseconds: 300));
 
-    final alarms = await Alarm.getAlarms();
-    final ringingAlarms =
-        alarms.where((a) => Alarm.getAlarm(a.id) != null).toList();
-
-    if (ringingAlarms.isNotEmpty && mounted) {
+    final ringing = Alarm.ringing.value;
+    if (ringing.alarms.isNotEmpty && mounted) {
       _navigatorKey.currentState?.pushAndRemoveUntil(
         MaterialPageRoute(
-          builder: (_) => RingingScreen(alarmId: ringingAlarms.first.id),
+          builder: (_) => RingingScreen(alarmId: ringing.alarms.first.id),
         ),
         (route) => false,
       );
