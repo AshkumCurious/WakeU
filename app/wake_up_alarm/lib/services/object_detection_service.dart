@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart';
+import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 import '../utils/app_theme.dart';
 
 class DetectionResult {
@@ -17,95 +17,69 @@ class DetectionResult {
 }
 
 class ObjectDetectionService {
-  late final ObjectDetector _detector;
+  late final ImageLabeler _labeler;
   bool _isInitialized = false;
-
-  // Broad ML Kit category mapping
-  static const Map<String, List<String>> _labelMap = {
-    'bottle': ['bottle', 'drink', 'food and drink', 'beverage'],
-    'cup': ['cup', 'drink', 'food and drink', 'beverage', 'home good'],
-    'book': ['book', 'home good', 'paper'],
-    'laptop': ['laptop', 'computer', 'electronic', 'home good'],
-    'plant': ['plant', 'tree', 'flower', 'home good'],
-    'chair': ['chair', 'furniture', 'home good', 'seat'], // ← home good
-    'footwear': [
-      'shoe',
-      'footwear',
-      'fashion good',
-      'clothing'
-    ], // ← fashion good
-    'glasses': [
-      'glasses',
-      'eyewear',
-      'fashion good',
-      'optical'
-    ], // ← fashion good
-    'bag': ['bag', 'fashion good', 'clothing', 'accessory'],
-    'pen': ['pen', 'pencil', 'home good', 'stationery'],
-    'watch': ['watch', 'fashion good', 'accessory', 'jewelry'],
-    'pillow': ['pillow', 'home good', 'furniture', 'textile'],
-  };
 
   Future<void> init() async {
     if (_isInitialized) return;
-    final options = ObjectDetectorOptions(
-      mode: DetectionMode.single,
-      classifyObjects: true,
-      multipleObjects: true,
+    _labeler = ImageLabeler(
+      options: ImageLabelerOptions(
+        confidenceThreshold: AppConstants.detectionConfidenceThreshold,
+      ),
     );
-    _detector = ObjectDetector(options: options);
     _isInitialized = true;
   }
 
   Future<DetectionResult> detectFromFile(
     File imageFile,
-    String targetMlLabel,
+    List<String> targetLabels,
   ) async {
     if (!_isInitialized) await init();
 
     final inputImage = InputImage.fromFile(imageFile);
-    final objects = await _detector.processImage(inputImage);
+    final labels = await _labeler.processImage(inputImage);
 
-    final allLabels = <String>[];
-    String bestMatchLabel = '';
-    double bestMatchConfidence = 0.0;
+    final allDetected = labels
+        .map((l) => '${l.label} (${(l.confidence * 100).toStringAsFixed(0)}%)')
+        .toList();
 
-    // Get all accepted labels for this target
-    final acceptedLabels =
-        _labelMap[targetMlLabel.toLowerCase()] ?? [targetMlLabel.toLowerCase()];
-
-    for (final obj in objects) {
-      for (final label in obj.labels) {
-        final lowerLabel = label.text.toLowerCase();
-        allLabels.add(lowerLabel);
-
-        // Check if detected label matches any accepted label for this item
-        final isMatch = acceptedLabels.any((accepted) =>
-            lowerLabel.contains(accepted) || accepted.contains(lowerLabel));
-
-        if (isMatch && label.confidence > bestMatchConfidence) {
-          bestMatchConfidence = label.confidence;
-          bestMatchLabel = label.text;
+    final targets = targetLabels.map((l) => l.toLowerCase()).toList();
+    for (final label in labels) {
+      if (label.confidence < AppConstants.detectionConfidenceThreshold) {
+        continue;
+      }
+      final detected = label.label.toLowerCase();
+      for (final target in targets) {
+        if (_labelsMatch(detected, target)) {
+          return DetectionResult(
+            matched: true,
+            detectedLabel: label.label,
+            confidence: label.confidence,
+            allDetected: allDetected,
+          );
         }
       }
     }
 
-    final matched =
-        bestMatchConfidence >= AppConstants.detectionConfidenceThreshold;
-
     return DetectionResult(
-      matched: matched,
-      detectedLabel: bestMatchLabel.isEmpty
-          ? (allLabels.isNotEmpty ? allLabels.first : 'nothing')
-          : bestMatchLabel,
-      confidence: bestMatchConfidence,
-      allDetected: allLabels,
+      matched: false,
+      detectedLabel: labels.isNotEmpty ? labels.first.label : 'nothing',
+      confidence: labels.isNotEmpty ? labels.first.confidence : 0,
+      allDetected: allDetected,
     );
+  }
+
+  bool _labelsMatch(String detected, String target) {
+    if (detected == target) return true;
+    final detectedWords = detected.split(RegExp(r'[\s,_-]+'));
+    final targetWords = target.split(RegExp(r'[\s,_-]+'));
+    return detectedWords.any((w) => w == target) ||
+        targetWords.any((w) => w == detected);
   }
 
   void dispose() {
     if (_isInitialized) {
-      _detector.close();
+      _labeler.close();
       _isInitialized = false;
     }
   }

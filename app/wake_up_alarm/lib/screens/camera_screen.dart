@@ -3,11 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:wake_up_alarm/screens/home_screen.dart';
+import '../services/alarm_storage_service.dart';
 import '../services/item_selector_service.dart';
 import '../services/object_detection_service.dart';
 import '../services/alarm_scheduler_service.dart';
 import '../utils/app_theme.dart';
+import 'home_screen.dart';
 import 'result_screen.dart';
 
 class CameraScreen extends StatefulWidget {
@@ -26,6 +27,7 @@ class CameraScreen extends StatefulWidget {
 
 class _CameraScreenState extends State<CameraScreen>
     with WidgetsBindingObserver {
+  final _storage = AlarmStorageService();
   CameraController? _controller;
   List<CameraDescription>? _cameras;
   final _detector = ObjectDetectionService();
@@ -58,6 +60,15 @@ class _CameraScreenState extends State<CameraScreen>
       _controller!.dispose();
     } else if (state == AppLifecycleState.resumed) {
       _initCamera();
+    }
+  }
+
+  Future<void> _dismissAlarm() async {
+    final alarm = await _storage.getAlarmById(widget.alarmId);
+    if (alarm != null) {
+      await AlarmSchedulerService.handleAlarmDismissed(alarm);
+    } else {
+      await AlarmSchedulerService.cancelAlarm(widget.alarmId);
     }
   }
 
@@ -110,14 +121,13 @@ class _CameraScreenState extends State<CameraScreen>
 
       final result = await _detector.detectFromFile(
         imageFile,
-        widget.targetItem.mlLabel,
+        widget.targetItem.matchLabels,
       );
 
       _attempts++;
 
       if (result.matched) {
-        // Stop the alarm
-        await AlarmSchedulerService.cancelAlarm(widget.alarmId);
+        await _dismissAlarm();
 
         if (mounted) {
           Navigator.pushReplacement(
@@ -153,31 +163,37 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
+  Future<void> _skipAlarm() async {
+    await _dismissAlarm();
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async => false,
+    return PopScope(
+      canPop: false,
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Stack(
           children: [
-            // Camera preview
             if (_cameraReady && _controller != null)
               Positioned.fill(child: CameraPreview(_controller!))
-            else if (_errorMessage != null)
+            else if (_errorMessage != null && !_cameraReady)
               _buildErrorState()
             else
               const Center(
                 child: CircularProgressIndicator(color: AppTheme.accent),
               ),
 
-            // Top overlay
-            _buildTopOverlay(),
+            if (_cameraReady) _buildViewfinder(),
 
-            // Bottom overlay
+            _buildTopOverlay(),
             _buildBottomOverlay(),
 
-            // Detecting overlay
             if (_isDetecting) _buildDetectingOverlay(),
           ],
         ),
@@ -185,19 +201,36 @@ class _CameraScreenState extends State<CameraScreen>
     );
   }
 
+  Widget _buildViewfinder() {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: _ViewfinderPainter(),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTopOverlay() {
+    final remaining =
+        AppConstants.maxDetectionAttempts - _attempts + 1;
+
     return Positioned(
       top: 0,
       left: 0,
       right: 0,
       child: Container(
         padding: EdgeInsets.fromLTRB(
-            20, MediaQuery.of(context).padding.top + 16, 20, 16),
+          20,
+          MediaQuery.of(context).padding.top + 16,
+          20,
+          16,
+        ),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Colors.black.withOpacity(0.8), Colors.transparent],
+            colors: [Colors.black.withOpacity(0.85), Colors.transparent],
           ),
         ),
         child: Column(
@@ -217,8 +250,10 @@ class _CameraScreenState extends State<CameraScreen>
                 const Spacer(),
                 if (_attempts > 0)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.danger.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(20),
@@ -234,41 +269,69 @@ class _CameraScreenState extends State<CameraScreen>
                       ),
                     ),
                   ),
-                if (_attempts > AppConstants.maxDetectionAttempts) ...[
-                  const SizedBox(
-                    width: 6,
+              ],
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.45),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    widget.targetItem.emoji,
+                    style: const TextStyle(fontSize: 32),
                   ),
-                  IconButton(
-                      onPressed: () async {
-                        await AlarmSchedulerService.cancelAlarm(widget.alarmId);
-                        Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const HomeScreen()));
-                      },
-                      icon: const Icon(Icons.alarm_off_outlined))
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.targetItem.name,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const Text(
+                          'Fill the frame with the object',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.white54,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
-              ],
+              ),
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Text(
-                  widget.targetItem.emoji,
-                  style: const TextStyle(fontSize: 36),
+            if (_attempts < AppConstants.maxDetectionAttempts) ...[
+              const SizedBox(height: 10),
+              Text(
+                '$remaining ${remaining == 1 ? 'try' : 'tries'} before skip',
+                style: const TextStyle(fontSize: 11, color: Colors.white54),
+              ),
+            ],
+            if (_attempts >= AppConstants.maxDetectionAttempts) ...[
+              const SizedBox(height: 10),
+              TextButton.icon(
+                onPressed: _skipAlarm,
+                icon: const Icon(Icons.alarm_off_outlined, size: 18),
+                label: const Text('Stop alarm anyway'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white70,
+                  backgroundColor: Colors.white12,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  widget.targetItem.name,
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ],
         ),
       ),
@@ -282,12 +345,16 @@ class _CameraScreenState extends State<CameraScreen>
       right: 0,
       child: Container(
         padding: EdgeInsets.fromLTRB(
-            30, 24, 30, MediaQuery.of(context).padding.bottom + 32),
+          30,
+          24,
+          30,
+          MediaQuery.of(context).padding.bottom + 32,
+        ),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
-            colors: [Colors.black.withOpacity(0.9), Colors.transparent],
+            colors: [Colors.black.withOpacity(0.92), Colors.transparent],
           ),
         ),
         child: Column(
@@ -298,36 +365,48 @@ class _CameraScreenState extends State<CameraScreen>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppTheme.danger.withOpacity(0.15),
+                  color: AppTheme.danger.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppTheme.danger.withOpacity(0.4)),
+                  border: Border.all(color: AppTheme.danger.withOpacity(0.45)),
                 ),
-                child: Text(
-                  _errorMessage!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                  ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline,
+                        color: AppTheme.danger, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-
-            // Shutter button
             GestureDetector(
               onTap: _captureAndDetect,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
-                width: 80,
-                height: 80,
+                width: 84,
+                height: 84,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: _isCapturing
                       ? Colors.white.withOpacity(0.5)
                       : Colors.white,
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
+                    color: AppTheme.accent.withOpacity(0.6),
                     width: 4,
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.accent.withOpacity(0.25),
+                      blurRadius: 16,
+                    ),
+                  ],
                 ),
                 child: _isCapturing
                     ? const Center(
@@ -343,17 +422,14 @@ class _CameraScreenState extends State<CameraScreen>
                     : const Icon(
                         Icons.camera_alt_rounded,
                         color: Colors.black,
-                        size: 32,
+                        size: 34,
                       ),
               ),
             ),
             const SizedBox(height: 12),
             const Text(
-              'Point at the object and tap',
-              style: TextStyle(
-                color: Colors.white60,
-                fontSize: 13,
-              ),
+              'Center the object in the frame and tap',
+              style: TextStyle(color: Colors.white60, fontSize: 13),
             ),
           ],
         ),
@@ -364,7 +440,7 @@ class _CameraScreenState extends State<CameraScreen>
   Widget _buildDetectingOverlay() {
     return Positioned.fill(
       child: Container(
-        color: Colors.black.withOpacity(0.7),
+        color: Colors.black.withOpacity(0.75),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -395,10 +471,7 @@ class _CameraScreenState extends State<CameraScreen>
             const SizedBox(height: 8),
             Text(
               'Looking for ${widget.targetItem.name}',
-              style: const TextStyle(
-                fontSize: 14,
-                color: Colors.white60,
-              ),
+              style: const TextStyle(fontSize: 14, color: Colors.white60),
             ),
           ],
         ),
@@ -431,4 +504,85 @@ class _CameraScreenState extends State<CameraScreen>
       ),
     );
   }
+}
+
+class _ViewfinderPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final frameWidth = size.width * 0.78;
+    final frameHeight = frameWidth * 0.85;
+    final left = (size.width - frameWidth) / 2;
+    final top = size.height * 0.28;
+
+    final overlay = Paint()..color = Colors.black.withOpacity(0.45);
+
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, top), overlay);
+    canvas.drawRect(
+      Rect.fromLTWH(
+        0,
+        top + frameHeight,
+        size.width,
+        size.height - top - frameHeight,
+      ),
+      overlay,
+    );
+    canvas.drawRect(Rect.fromLTWH(0, top, left, frameHeight), overlay);
+    canvas.drawRect(
+      Rect.fromLTWH(
+        left + frameWidth,
+        top,
+        size.width - left - frameWidth,
+        frameHeight,
+      ),
+      overlay,
+    );
+
+    final border = Paint()
+      ..color = AppTheme.accent.withOpacity(0.85)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(left, top, frameWidth, frameHeight),
+        const Radius.circular(16),
+      ),
+      border,
+    );
+
+    final corner = Paint()
+      ..color = AppTheme.accent
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+    const len = 22.0;
+
+    void drawCorner(Offset start, Offset hEnd, Offset vEnd) {
+      canvas.drawLine(start, hEnd, corner);
+      canvas.drawLine(start, vEnd, corner);
+    }
+
+    drawCorner(
+      Offset(left, top),
+      Offset(left + len, top),
+      Offset(left, top + len),
+    );
+    drawCorner(
+      Offset(left + frameWidth, top),
+      Offset(left + frameWidth - len, top),
+      Offset(left + frameWidth, top + len),
+    );
+    drawCorner(
+      Offset(left, top + frameHeight),
+      Offset(left + len, top + frameHeight),
+      Offset(left, top + frameHeight - len),
+    );
+    drawCorner(
+      Offset(left + frameWidth, top + frameHeight),
+      Offset(left + frameWidth - len, top + frameHeight),
+      Offset(left + frameWidth, top + frameHeight - len),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

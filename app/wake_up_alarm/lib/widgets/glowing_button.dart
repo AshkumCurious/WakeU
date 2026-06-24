@@ -2,10 +2,11 @@
 import 'package:flutter/material.dart';
 import '../utils/app_theme.dart';
 
-class GlowingButton extends StatefulWidget {
+/// Simple primary action button — no glow or animation.
+class GlowingButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
-  final Color color;
+  final Color? color;
   final IconData? icon;
   final double? width;
 
@@ -13,92 +14,44 @@ class GlowingButton extends StatefulWidget {
     super.key,
     required this.label,
     required this.onTap,
-    this.color = AppTheme.accent,
+    this.color,
     this.icon,
     this.width,
   });
 
   @override
-  State<GlowingButton> createState() => _GlowingButtonState();
-}
-
-class _GlowingButtonState extends State<GlowingButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _glow;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
-    _glow = Tween(begin: 6.0, end: 20.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _glow,
-      builder: (_, child) => GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          width: widget.width,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
-          decoration: BoxDecoration(
-            color: widget.color,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: widget.color.withOpacity(0.5),
-                blurRadius: _glow.value,
-                spreadRadius: 0,
-              ),
+    return SizedBox(
+      width: width,
+      child: FilledButton(
+        onPressed: onTap,
+        style: FilledButton.styleFrom(
+          backgroundColor: color ?? AppTheme.textPrimary,
+          foregroundColor: AppTheme.background,
+          minimumSize: const Size.fromHeight(52),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 20),
+              const SizedBox(width: 8),
             ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (widget.icon != null) ...[
-                Icon(widget.icon,
-                    color: AppTheme.background, size: 20),
-                const SizedBox(width: 10),
-              ],
-              Text(
-                widget.label,
-                style: const TextStyle(
-                  color: AppTheme.background,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
-                ),
-              ),
-            ],
-          ),
+            Text(label),
+          ],
         ),
       ),
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-
 class AlarmCard extends StatelessWidget {
   final String timeString;
   final String label;
   final String repeatString;
   final bool isEnabled;
+  final bool isNext;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
   final VoidCallback onTap;
@@ -109,6 +62,7 @@ class AlarmCard extends StatelessWidget {
     required this.label,
     required this.repeatString,
     required this.isEnabled,
+    this.isNext = false,
     required this.onToggle,
     required this.onDelete,
     required this.onTap,
@@ -116,104 +70,101 @@ class AlarmCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedOpacity(
-        opacity: isEnabled ? 1.0 : 0.45,
-        duration: const Duration(milliseconds: 200),
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: AppTheme.surfaceElevated,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isEnabled
-                  ? AppTheme.accent.withOpacity(0.3)
-                  : AppTheme.border,
-              width: 1,
+    final parts = timeString.split(' ');
+    final time = parts.isNotEmpty ? parts[0] : timeString;
+    final period = parts.length > 1 ? parts[1] : '';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onDelete,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedOpacity(
+          opacity: isEnabled ? 1.0 : 0.45,
+          duration: const Duration(milliseconds: 200),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            decoration: BoxDecoration(
+              color: isNext
+                  ? AppTheme.surfaceElevated
+                  : AppTheme.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isNext
+                    ? AppTheme.accentSecondary.withValues(alpha: 0.35)
+                    : AppTheme.border.withValues(alpha: 0.6),
+                width: 0.5,
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          timeString.split(' ')[0],
-                          style: TextStyle(
-                            fontSize: 40,
-                            fontWeight: FontWeight.w700,
-                            color: isEnabled
-                                ? AppTheme.textPrimary
-                                : AppTheme.textMuted,
-                            letterSpacing: -2,
-                            height: 1,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            time,
+                            style: TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.w300,
+                              color: isEnabled
+                                  ? AppTheme.textPrimary
+                                  : AppTheme.textMuted,
+                              letterSpacing: -1,
+                              height: 1,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          timeString.split(' ')[1],
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: isEnabled
-                                ? AppTheme.accent
-                                : AppTheme.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      label.isEmpty ? 'Alarm' : label,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: AppTheme.textSecondary,
+                          if (period.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              period,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w400,
+                                color: isEnabled
+                                    ? AppTheme.textSecondary
+                                    : AppTheme.textMuted,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        const Icon(Icons.repeat,
-                            size: 12, color: AppTheme.textMuted),
-                        const SizedBox(width: 4),
-                        Text(
-                          repeatString,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.textMuted,
-                          ),
+                      const SizedBox(height: 6),
+                      Text(
+                        label.isEmpty ? 'Alarm' : label,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w400,
+                          color: isEnabled
+                              ? AppTheme.textSecondary
+                              : AppTheme.textMuted,
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        repeatString,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isEnabled
+                              ? AppTheme.textMuted
+                              : AppTheme.textMuted.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Column(
-                children: [
-                  Switch(
-                    value: isEnabled,
-                    onChanged: (_) => onToggle(),
-                    activeColor: AppTheme.accent,
-                    activeTrackColor: AppTheme.accent.withOpacity(0.2),
-                    inactiveThumbColor: AppTheme.textMuted,
-                    inactiveTrackColor: AppTheme.border,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline,
-                        color: AppTheme.textMuted, size: 20),
-                    onPressed: onDelete,
-                    splashRadius: 20,
-                  ),
-                ],
-              ),
-            ],
+                Switch(
+                  value: isEnabled,
+                  onChanged: (_) => onToggle(),
+                ),
+              ],
+            ),
           ),
         ),
       ),

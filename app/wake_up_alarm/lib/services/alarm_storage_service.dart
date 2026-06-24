@@ -1,13 +1,23 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import '../models/alarm_model.dart';
 
 class AlarmStorageService {
   static const _key = 'alarms_v1';
+  static const _uuid = Uuid();
 
   Future<List<AlarmModel>> loadAlarms() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_key) ?? [];
     return raw.map((s) => AlarmModel.fromJsonString(s)).toList();
+  }
+
+  Future<AlarmModel?> getAlarmById(int id) async {
+    final alarms = await loadAlarms();
+    for (final alarm in alarms) {
+      if (alarm.id == id) return alarm;
+    }
+    return null;
   }
 
   Future<void> saveAlarms(List<AlarmModel> alarms) async {
@@ -38,5 +48,8 @@ class AlarmStorageService {
     await saveAlarms(alarms);
   }
 
-  int generateId() => DateTime.now().millisecondsSinceEpoch % 100000;
+  int generateId() {
+    final id = _uuid.v4().hashCode & 0x7FFFFFFF;
+    return id == 0 ? 1 : id;
+  }
 }

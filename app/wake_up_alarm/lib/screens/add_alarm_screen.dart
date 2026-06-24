@@ -4,7 +4,6 @@ import 'package:flutter/cupertino.dart';
 import '../models/alarm_model.dart';
 import '../services/alarm_storage_service.dart';
 import '../utils/app_theme.dart';
-import '../widgets/glowing_button.dart';
 
 class AddAlarmScreen extends StatefulWidget {
   final AlarmModel? existing;
@@ -27,8 +26,8 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
     final now = DateTime.now();
     _selectedTime = widget.existing?.scheduledTime ??
         DateTime(now.year, now.month, now.day, now.hour, now.minute);
-    _repeatDays = List.from(
-        widget.existing?.repeatDays ?? List.filled(7, false));
+    _repeatDays =
+        List.from(widget.existing?.repeatDays ?? List.filled(7, false));
     _labelController =
         TextEditingController(text: widget.existing?.label ?? '');
     _vibrate = widget.existing?.vibrate ?? true;
@@ -41,219 +40,275 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
   }
 
   void _save() {
+    final now = DateTime.now();
+    final normalized = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      _selectedTime.hour,
+      _selectedTime.minute,
+    );
     final alarm = AlarmModel(
       id: widget.existing?.id ?? _storage.generateId(),
       label: _labelController.text.trim(),
-      scheduledTime: _selectedTime,
-      isEnabled: true,
+      scheduledTime: normalized,
+      isEnabled: widget.existing?.isEnabled ?? true,
       repeatDays: _repeatDays,
       vibrate: _vibrate,
     );
     Navigator.pop(context, alarm);
   }
 
+  void _applyRepeatPreset(List<bool> days) {
+    setState(() => _repeatDays = List.from(days));
+  }
+
+  String get _previewTime {
+    final h = _selectedTime.hour;
+    final m = _selectedTime.minute.toString().padLeft(2, '0');
+    final isPm = h >= 12;
+    final hour = h > 12 ? h - 12 : (h == 0 ? 12 : h);
+    return '$hour:$m ${isPm ? 'PM' : 'AM'}';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.existing != null;
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.close_rounded),
+        leading: TextButton(
           onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
         ),
-        title: Text(widget.existing != null ? 'Edit Alarm' : 'New Alarm'),
+        leadingWidth: 80,
+        title: Text(isEditing ? 'Edit alarm' : 'New alarm'),
         actions: [
           TextButton(
             onPressed: _save,
             child: const Text(
-              'SAVE',
-              style: TextStyle(
-                color: AppTheme.accent,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1,
+              'Save',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Text(
+                      _previewTime,
+                      style: const TextStyle(
+                        fontSize: 56,
+                        fontWeight: FontWeight.w200,
+                        color: AppTheme.textPrimary,
+                        letterSpacing: -2,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildTimePicker(),
+                  const SizedBox(height: 36),
+                  _sectionLabel('Label'),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _labelController,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 16,
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: 'Morning, Work, …',
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  _sectionLabel('Repeat'),
+                  const SizedBox(height: 12),
+                  _buildRepeatPresets(),
+                  const SizedBox(height: 16),
+                  _buildDayPicker(),
+                  const SizedBox(height: 28),
+                  _buildToggleRow(
+                    'Vibrate',
+                    _vibrate,
+                    (v) => setState(() => _vibrate = v),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: _save,
+                  child: Text(isEditing ? 'Save changes' : 'Set alarm'),
+                ),
               ),
             ),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildTimePicker(),
-            const SizedBox(height: 32),
-            _buildLabelField(),
-            const SizedBox(height: 24),
-            _buildRepeatDays(),
-            const SizedBox(height: 24),
-            _buildToggleRow(
-              'Vibrate',
-              Icons.vibration_rounded,
-              _vibrate,
-              (v) => setState(() => _vibrate = v),
-            ),
-            const SizedBox(height: 48),
-            Center(
-              child: GlowingButton(
-                label: 'SAVE ALARM',
-                icon: Icons.check_rounded,
-                onTap: _save,
-                width: double.infinity,
-              ),
-            ),
-          ],
-        ),
+    );
+  }
+
+  Widget _sectionLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 13,
+        color: AppTheme.textMuted,
+        fontWeight: FontWeight.w400,
       ),
     );
   }
 
   Widget _buildTimePicker() {
-    return Container(
-      height: 200,
-      decoration: BoxDecoration(
-        color: AppTheme.surfaceElevated,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: CupertinoDatePicker(
-        mode: CupertinoDatePickerMode.time,
-        initialDateTime: _selectedTime,
-        onDateTimeChanged: (dt) =>
-            setState(() => _selectedTime = dt),
-        use24hFormat: false,
-        backgroundColor: Colors.transparent,
+    return SizedBox(
+      height: 180,
+      child: CupertinoTheme(
+        data: const CupertinoThemeData(
+          brightness: Brightness.dark,
+          textTheme: CupertinoTextThemeData(
+            dateTimePickerTextStyle: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w300,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+        ),
+        child: CupertinoDatePicker(
+          mode: CupertinoDatePickerMode.time,
+          initialDateTime: _selectedTime,
+          onDateTimeChanged: (dt) => setState(() => _selectedTime = dt),
+          use24hFormat: false,
+          backgroundColor: Colors.transparent,
+        ),
       ),
     );
   }
 
-  Widget _buildLabelField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'LABEL',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: AppTheme.textMuted,
-            letterSpacing: 2,
+  Widget _buildRepeatPresets() {
+    const presets = <String, List<bool>>{
+      'Once': [false, false, false, false, false, false, false],
+      'Daily': [true, true, true, true, true, true, true],
+      'Weekdays': [false, true, true, true, true, true, false],
+      'Weekends': [true, false, false, false, false, false, true],
+    };
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: presets.entries.map((entry) {
+        final isActive = _repeatDays.toString() == entry.value.toString();
+        return GestureDetector(
+          onTap: () => _applyRepeatPreset(entry.value),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+            decoration: BoxDecoration(
+              color: isActive ? AppTheme.surfaceElevated : AppTheme.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isActive
+                    ? AppTheme.accentSecondary.withValues(alpha: 0.5)
+                    : AppTheme.border.withValues(alpha: 0.5),
+                width: 0.5,
+              ),
+            ),
+            child: Text(
+              entry.key,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                color: isActive ? AppTheme.textPrimary : AppTheme.textSecondary,
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _labelController,
-          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16),
-          decoration: InputDecoration(
-            hintText: 'e.g. Morning alarm',
-            hintStyle:
-                const TextStyle(color: AppTheme.textMuted, fontSize: 16),
-            filled: true,
-            fillColor: AppTheme.surfaceElevated,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppTheme.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppTheme.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: AppTheme.accent, width: 1.5),
-            ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          ),
-        ),
-      ],
+        );
+      }).toList(),
     );
   }
 
-  Widget _buildRepeatDays() {
+  Widget _buildDayPicker() {
     const dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'REPEAT',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: AppTheme.textMuted,
-            letterSpacing: 2,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: List.generate(7, (i) {
-            final active = _repeatDays[i];
-            return GestureDetector(
-              onTap: () =>
-                  setState(() => _repeatDays[i] = !_repeatDays[i]),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color:
-                      active ? AppTheme.accent : AppTheme.surfaceElevated,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: active ? AppTheme.accent : AppTheme.border,
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    dayLabels[i],
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: active
-                          ? AppTheme.background
-                          : AppTheme.textSecondary,
-                    ),
-                  ),
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: List.generate(7, (i) {
+        final active = _repeatDays[i];
+        return GestureDetector(
+          onTap: () => setState(() => _repeatDays[i] = !_repeatDays[i]),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: active ? AppTheme.textPrimary : AppTheme.surface,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: active
+                    ? AppTheme.textPrimary
+                    : AppTheme.border.withValues(alpha: 0.5),
+                width: 0.5,
+              ),
+            ),
+            child: Center(
+              child: Text(
+                dayLabels[i],
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: active ? AppTheme.background : AppTheme.textSecondary,
                 ),
               ),
-            );
-          }),
-        ),
-      ],
+            ),
+          ),
+        );
+      }),
     );
   }
 
   Widget _buildToggleRow(
     String label,
-    IconData icon,
     bool value,
     ValueChanged<bool> onChanged,
   ) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceElevated,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppTheme.border.withValues(alpha: 0.5),
+          width: 0.5,
+        ),
       ),
       child: Row(
         children: [
-          Icon(icon, color: AppTheme.textSecondary, size: 20),
           const SizedBox(width: 12),
-          Text(label,
-              style: const TextStyle(
-                  color: AppTheme.textPrimary, fontSize: 15)),
-          const Spacer(),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeColor: AppTheme.accent,
-            activeTrackColor: AppTheme.accent.withOpacity(0.2),
-            inactiveThumbColor: AppTheme.textMuted,
-            inactiveTrackColor: AppTheme.border,
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w400,
+            ),
           ),
+          const Spacer(),
+          Switch(value: value, onChanged: onChanged),
+          const SizedBox(width: 4),
         ],
       ),
     );
