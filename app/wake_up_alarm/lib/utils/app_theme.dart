@@ -141,65 +141,71 @@ class AppConstants {
     {
       'name': 'Laptop',
       'emoji': '💻',
-      'mlLabel': 'computer',
-      'altLabels': <String>[],
+      'mlLabel': 'laptop',
+      'altLabels': ['computer', 'macbook', 'notebook', 'personal computer'],
     },
     {
       'name': 'Phone',
       'emoji': '📱',
       'mlLabel': 'mobile phone',
-      'altLabels': <String>[],
+      'altLabels': ['smartphone', 'telephone', 'iphone', 'gadget'],
     },
     {
       'name': 'Coffee Mug',
       'emoji': '☕',
       'mlLabel': 'cup',
-      'altLabels': ['coffee', 'cappuccino'],
+      'altLabels': ['coffee', 'mug', 'cappuccino', 'coffee cup', 'drinkware'],
     },
     {
       'name': 'Chair',
       'emoji': '🪑',
       'mlLabel': 'chair',
-      'altLabels': <String>[],
+      'altLabels': ['seat', 'furniture', 'stool', 'office chair'],
     },
     {
       'name': 'TV',
       'emoji': '📺',
       'mlLabel': 'television',
-      'altLabels': <String>[],
+      'altLabels': ['tv', 'screen', 'monitor', 'display', 'flat screen'],
     },
     {
       'name': 'Houseplant',
       'emoji': '🌱',
       'mlLabel': 'plant',
-      'altLabels': ['flower', 'flowerpot'],
+      'altLabels': [
+        'flower',
+        'flowerpot',
+        'houseplant',
+        'tree',
+        'leaf',
+        'vegetation'
+      ],
     },
     {
       'name': 'Glasses',
       'emoji': '👓',
       'mlLabel': 'glasses',
-      'altLabels': ['sunglasses'],
+      'altLabels': ['sunglasses', 'eyewear', 'spectacles', 'goggles'],
     },
     {
       'name': 'Sneakers',
       'emoji': '👟',
-      'mlLabel': 'shoe',
-      'altLabels': ['sneakers'],
+      'mlLabel': 'sneakers',
+      'altLabels': ['shoe', 'footwear', 'boot', 'athletic shoe'],
     },
     {
       'name': 'Bag',
       'emoji': '👜',
       'mlLabel': 'bag',
-      'altLabels': ['handbag'],
+      'altLabels': ['handbag', 'backpack', 'tote', 'luggage', 'baggage'],
     },
     {
       'name': 'Pillow',
       'emoji': '🛏️',
       'mlLabel': 'pillow',
-      'altLabels': ['cushion'],
+      'altLabels': ['cushion', 'throw pillow', 'bedding'],
     },
   ];
-
   static const double detectionConfidenceThreshold = 0.40;
   static const int maxDetectionAttempts = 3;
 }
