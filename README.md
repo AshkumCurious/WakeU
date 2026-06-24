@@ -8,8 +8,8 @@ A Flutter alarm app that **forces you to prove you're awake** by making you find
 2. **Alarm rings** — the screen wakes your device with a loud alarm
 3. **Roulette picks an item** — a spinning roulette randomly lands on one of 6 household items
 4. **Find it & photograph it** — use the in-app camera to take a photo of the object
-5. **ML Kit detects it** — Google ML Kit runs on-device object detection (no internet needed)
-6. **Alarm stops** ✅ — only if the correct object is detected with ≥55% confidence
+5. **ML Kit labels it** — Google ML Kit image labeling runs on-device (no internet needed)
+6. **Alarm stops** ✅ — only if the correct object is detected at or above the confidence threshold
 
 ---
 
@@ -17,12 +17,12 @@ A Flutter alarm app that **forces you to prove you're awake** by making you find
 
 | Feature | Package |
 |---|---|
-| Alarm scheduling | `alarm ^4.0.2` |
-| Notifications | `flutter_local_notifications ^17.2.2` |
-| Camera | `camera ^0.11.0+2` |
-| On-device ML | `google_mlkit_object_detection ^0.13.0` |
-| Permissions | `permission_handler ^11.3.1` |
-| Storage | `shared_preferences ^2.3.2` |
+| Alarm scheduling | `alarm ^5.4.1` |
+| Notifications | `flutter_local_notifications ^21.0.0` |
+| Camera | `camera ^0.12.0` |
+| On-device ML | `google_mlkit_image_labeling ^0.14.2` |
+| Permissions | `permission_handler ^12.0.3` |
+| Storage | `shared_preferences ^2.5.5` |
 
 ---
 
@@ -34,10 +34,10 @@ lib/
 ├── models/
 │   └── alarm_model.dart             # Alarm data model
 ├── services/
-│   ├── alarm_scheduler_service.dart # Schedule/cancel alarms
+│   ├── alarm_scheduler_service.dart # Schedule/cancel/sync alarms
 │   ├── alarm_storage_service.dart   # Persist alarms to SharedPrefs
 │   ├── item_selector_service.dart   # Random item picker
-│   └── object_detection_service.dart # ML Kit wrapper
+│   └── object_detection_service.dart # ML Kit image labeling wrapper
 ├── screens/
 │   ├── home_screen.dart             # Alarm list
 │   ├── add_alarm_screen.dart        # Create/edit alarm
@@ -62,16 +62,17 @@ flutter pub get
 
 ### 2. Add alarm sound
 
-Place an `alarm.mp3` file in `assets/sounds/`:
+Place an `alert-alarm.wav` file in `assets/sounds/`:
 
 ```
 assets/
   sounds/
-    alarm.mp3   ← put your alarm sound here
-  images/       ← optional
+    alert-alarm.wav   ← alarm sound used by the app
+  images/             ← optional
 ```
 
 Then ensure `pubspec.yaml` has:
+
 ```yaml
 flutter:
   assets:
@@ -84,6 +85,7 @@ flutter:
 Minimum SDK is **24** (Android 7). Targets SDK **34**.
 
 The `AndroidManifest.xml` already includes all needed permissions:
+
 - `CAMERA`
 - `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM`
 - `FOREGROUND_SERVICE` (for background alarm audio)
@@ -92,6 +94,7 @@ The `AndroidManifest.xml` already includes all needed permissions:
 ### 4. iOS setup
 
 `Info.plist` already includes:
+
 - `NSCameraUsageDescription`
 - `UIBackgroundModes: audio` (for alarm sound)
 
@@ -107,22 +110,22 @@ flutter run
 
 ## Detectable Items
 
-Items are curated to match ML Kit's base model taxonomy reliably:
+Items use labels from [ML Kit's official label map](https://developers.google.com/ml-kit/vision/image-labeling/label-map) only — no custom or guessed labels.
 
-| Item | ML Label |
-|---|---|
-| Water Bottle | `bottle` |
-| Coffee Mug | `cup` |
-| Book | `book` |
-| Laptop | `laptop` |
-| Plant | `plant` |
-| Chair | `chair` |
-| Shoes | `footwear` |
-| Glasses | `glasses` |
-| Bag | `bag` |
-| Pen | `pen` |
-| Watch | `watch` |
-| Pillow | `pillow` |
+| Item | Primary ML label | Also accepts |
+|---|---|---|
+| Laptop | `computer` | — |
+| Phone | `mobile phone` | — |
+| Coffee Mug | `cup` | `coffee`, `cappuccino` |
+| Chair | `chair` | — |
+| TV | `television` | — |
+| Houseplant | `plant` | `flower`, `flowerpot` |
+| Glasses | `glasses` | `sunglasses` |
+| Sneakers | `shoe` | `sneakers` |
+| Bag | `bag` | `handbag` |
+| Pillow | `pillow` | `cushion` |
+
+Removed items like bottle, book, pen, and watch — those words are **not** in ML Kit's default model.
 
 To add or change items, edit `AppConstants.alarmItems` in `lib/utils/app_theme.dart`.
 
@@ -130,7 +133,7 @@ To add or change items, edit `AppConstants.alarmItems` in `lib/utils/app_theme.d
 
 ## Detection Confidence
 
-Default threshold: **55%** (`AppConstants.detectionConfidenceThreshold`)
+Default threshold: **40%** (`AppConstants.detectionConfidenceThreshold`)
 
 Adjust in `app_theme.dart` if detections are too strict or too loose.
 
