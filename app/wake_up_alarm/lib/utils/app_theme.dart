@@ -207,5 +207,7 @@ class AppConstants {
     },
   ];
   static const double detectionConfidenceThreshold = 0.40;
-  static const int maxDetectionAttempts = 3;
+  static const int defaultMinAttemptsBeforeSkip = 3;
+  static const int minAttemptsBeforeSkipMin = 1;
+  static const int minAttemptsBeforeSkipMax = 10;
 }

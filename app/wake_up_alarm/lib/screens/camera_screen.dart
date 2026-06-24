@@ -35,6 +35,7 @@ class _CameraScreenState extends State<CameraScreen>
   bool _isDetecting = false;
   bool _cameraReady = false;
   int _attempts = 0;
+  int _minAttemptsBeforeSkip = AppConstants.defaultMinAttemptsBeforeSkip;
   String? _errorMessage;
 
   @override
@@ -42,7 +43,14 @@ class _CameraScreenState extends State<CameraScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _detector.init();
+    _loadAlarmSettings();
     _initCamera();
+  }
+
+  Future<void> _loadAlarmSettings() async {
+    final alarm = await _storage.getAlarmById(widget.alarmId);
+    if (!mounted || alarm == null) return;
+    setState(() => _minAttemptsBeforeSkip = alarm.minAttemptsBeforeSkip);
   }
 
   @override
@@ -212,8 +220,7 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   Widget _buildTopOverlay() {
-    final remaining =
-        AppConstants.maxDetectionAttempts - _attempts + 1;
+    final remaining = _minAttemptsBeforeSkip - _attempts;
 
     return Positioned(
       top: 0,
@@ -311,14 +318,14 @@ class _CameraScreenState extends State<CameraScreen>
                 ],
               ),
             ),
-            if (_attempts < AppConstants.maxDetectionAttempts) ...[
+            if (_attempts < _minAttemptsBeforeSkip) ...[
               const SizedBox(height: 10),
               Text(
                 '$remaining ${remaining == 1 ? 'try' : 'tries'} before skip',
                 style: const TextStyle(fontSize: 11, color: Colors.white54),
               ),
             ],
-            if (_attempts >= AppConstants.maxDetectionAttempts) ...[
+            if (_attempts >= _minAttemptsBeforeSkip) ...[
               const SizedBox(height: 10),
               TextButton.icon(
                 onPressed: _skipAlarm,

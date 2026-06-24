@@ -111,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openAlarmEditor([AlarmModel? existing]) async {
-    final result = await Navigator.push<AlarmModel>(
+    final result = await Navigator.push<AlarmEditorResult>(
       context,
       PageRouteBuilder(
         pageBuilder: (_, anim, __) => AddAlarmScreen(existing: existing),
@@ -126,14 +126,25 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (result == null) return;
 
-    if (existing != null) {
-      await _storage.updateAlarm(result);
-    } else {
-      await _storage.addAlarm(result);
+    if (result.delete) {
+      if (existing == null) return;
+      await AlarmSchedulerService.cancelAlarm(existing.id);
+      await _storage.deleteAlarm(existing.id);
+      await _loadAlarms();
+      return;
     }
-    await AlarmSchedulerService.cancelAlarm(result.id);
-    if (result.isEnabled) {
-      await AlarmSchedulerService.scheduleAlarm(result);
+
+    final alarm = result.alarm;
+    if (alarm == null) return;
+
+    if (existing != null) {
+      await _storage.updateAlarm(alarm);
+    } else {
+      await _storage.addAlarm(alarm);
+    }
+    await AlarmSchedulerService.cancelAlarm(alarm.id);
+    if (alarm.isEnabled) {
+      await AlarmSchedulerService.scheduleAlarm(alarm);
     }
     await _loadAlarms();
   }

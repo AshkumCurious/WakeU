@@ -9,6 +9,7 @@ class AlarmModel {
   final List<bool> repeatDays; // Sun=0 ... Sat=6
   final bool vibrate;
   final String sound;
+  final int minAttemptsBeforeSkip;
 
   const AlarmModel({
     required this.id,
@@ -18,6 +19,7 @@ class AlarmModel {
     List<bool>? repeatDays,
     this.vibrate = true,
     this.sound = 'default',
+    this.minAttemptsBeforeSkip = 3,
   }) : repeatDays = repeatDays ??
             const [false, false, false, false, false, false, false];
 
@@ -29,6 +31,7 @@ class AlarmModel {
     List<bool>? repeatDays,
     bool? vibrate,
     String? sound,
+    int? minAttemptsBeforeSkip,
   }) {
     return AlarmModel(
       id: id ?? this.id,
@@ -38,6 +41,8 @@ class AlarmModel {
       repeatDays: repeatDays ?? this.repeatDays,
       vibrate: vibrate ?? this.vibrate,
       sound: sound ?? this.sound,
+      minAttemptsBeforeSkip:
+          minAttemptsBeforeSkip ?? this.minAttemptsBeforeSkip,
     );
   }
 
@@ -72,6 +77,7 @@ class AlarmModel {
         'repeatDays': repeatDays,
         'vibrate': vibrate,
         'sound': sound,
+        'minAttemptsBeforeSkip': minAttemptsBeforeSkip,
       };
 
   factory AlarmModel.fromJson(Map<String, dynamic> json) => AlarmModel(
@@ -82,6 +88,7 @@ class AlarmModel {
         repeatDays: List<bool>.from(json['repeatDays']),
         vibrate: json['vibrate'] ?? true,
         sound: json['sound'] ?? 'default',
+        minAttemptsBeforeSkip: json['minAttemptsBeforeSkip'] ?? 3,
       );
 
   String toJsonString() => jsonEncode(toJson());
