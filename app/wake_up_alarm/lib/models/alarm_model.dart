@@ -10,6 +10,8 @@ class AlarmModel {
   final bool vibrate;
   final String sound;
   final int minAttemptsBeforeSkip;
+  final bool objectDetectionEnabled;
+  final bool situpsEnabled;
 
   const AlarmModel({
     required this.id,
@@ -20,6 +22,8 @@ class AlarmModel {
     this.vibrate = true,
     this.sound = 'default',
     this.minAttemptsBeforeSkip = 3,
+    this.objectDetectionEnabled = true,
+    this.situpsEnabled = false,
   }) : repeatDays = repeatDays ??
             const [false, false, false, false, false, false, false];
 
@@ -32,6 +36,8 @@ class AlarmModel {
     bool? vibrate,
     String? sound,
     int? minAttemptsBeforeSkip,
+    bool? objectDetectionEnabled,
+    bool? situpsEnabled,
   }) {
     return AlarmModel(
       id: id ?? this.id,
@@ -43,6 +49,9 @@ class AlarmModel {
       sound: sound ?? this.sound,
       minAttemptsBeforeSkip:
           minAttemptsBeforeSkip ?? this.minAttemptsBeforeSkip,
+      objectDetectionEnabled:
+          objectDetectionEnabled ?? this.objectDetectionEnabled,
+      situpsEnabled: situpsEnabled ?? this.situpsEnabled,
     );
   }
 
@@ -60,12 +69,20 @@ class AlarmModel {
     for (int i = 0; i < repeatDays.length; i++) {
       if (repeatDays[i]) active.add(days[i]);
     }
-    if (active.isEmpty) return 'Once';
-    if (active.length == 7) return 'Every day';
+    if (active.isEmpty) {
+      return 'Once';
+    }
+    if (active.length == 7) {
+      return 'Every day';
+    }
     if (active.length == 5 &&
         !repeatDays[0] &&
-        !repeatDays[6]) return 'Weekdays';
-    if (active.length == 2 && repeatDays[0] && repeatDays[6]) return 'Weekends';
+        !repeatDays[6]) {
+      return 'Weekdays';
+    }
+    if (active.length == 2 && repeatDays[0] && repeatDays[6]) {
+      return 'Weekends';
+    }
     return active.join(', ');
   }
 
@@ -78,6 +95,8 @@ class AlarmModel {
         'vibrate': vibrate,
         'sound': sound,
         'minAttemptsBeforeSkip': minAttemptsBeforeSkip,
+        'objectDetectionEnabled': objectDetectionEnabled,
+        'situpsEnabled': situpsEnabled,
       };
 
   factory AlarmModel.fromJson(Map<String, dynamic> json) => AlarmModel(
@@ -89,6 +108,8 @@ class AlarmModel {
         vibrate: json['vibrate'] ?? true,
         sound: json['sound'] ?? 'default',
         minAttemptsBeforeSkip: json['minAttemptsBeforeSkip'] ?? 3,
+        objectDetectionEnabled: json['objectDetectionEnabled'] ?? true,
+        situpsEnabled: json['situpsEnabled'] ?? false,
       );
 
   String toJsonString() => jsonEncode(toJson());

@@ -2,9 +2,11 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../services/alarm_storage_service.dart';
 import '../services/item_selector_service.dart';
 import '../utils/app_theme.dart';
 import 'camera_screen.dart';
+import 'situp_screen.dart';
 
 class RingingScreen extends StatefulWidget {
   final int alarmId;
@@ -16,8 +18,15 @@ class RingingScreen extends StatefulWidget {
 
 class _RingingScreenState extends State<RingingScreen>
     with TickerProviderStateMixin {
-  late final SelectedItem _winner;
-  late final List<SelectedItem> _cyclePool;
+  final _storage = AlarmStorageService();
+
+  SelectedItem? _winner;
+  List<SelectedItem> _cyclePool = const [];
+
+  bool _objectDetectionEnabled = true;
+  bool _situpsEnabled = false;
+  bool _useSitups = false;
+  int _situpTarget = 0;
 
   int _cycleIndex = 0;
   bool _revealed = false;
@@ -32,8 +41,7 @@ class _RingingScreenState extends State<RingingScreen>
   @override
   void initState() {
     super.initState();
-    _winner = ItemSelectorService.pickRandom();
-    _cyclePool = List.of(ItemSelectorService.allItems)..shuffle();
+    _initChallenge();
 
     _ringAnim = AnimationController(
       vsync: this,
@@ -59,7 +67,45 @@ class _RingingScreenState extends State<RingingScreen>
       ),
     );
 
-    Future.delayed(const Duration(milliseconds: 600), _startSelection);
+    // Challenge reveal is started after [_initChallenge] loads alarm settings.
+  }
+
+  Future<void> _initChallenge() async {
+    final alarm = await _storage.getAlarmById(widget.alarmId);
+
+    _objectDetectionEnabled = alarm?.objectDetectionEnabled ?? true;
+    _situpsEnabled = alarm?.situpsEnabled ?? false;
+
+    // Avoid a "no challenge enabled" state.
+    if (!_objectDetectionEnabled && !_situpsEnabled) {
+      _objectDetectionEnabled = true;
+      _situpsEnabled = false;
+    }
+
+    final rnd = Random();
+    final shouldUseSitups = _situpsEnabled &&
+        (!_objectDetectionEnabled || rnd.nextBool());
+
+    if (shouldUseSitups) {
+      _useSitups = true;
+      _situpTarget = 2 + rnd.nextInt(3); // 2..4
+    } else {
+      _useSitups = false;
+      _winner = ItemSelectorService.pickRandom();
+      _cyclePool = List.of(ItemSelectorService.allItems)..shuffle();
+    }
+
+    // Keep the existing "picking your challenge" animation timing.
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+
+    if (_useSitups) {
+      setState(() => _revealed = true);
+      _spinAnim.stop();
+      _revealAnim.forward();
+    } else {
+      _startSelection();
+    }
   }
 
   @override
@@ -72,6 +118,9 @@ class _RingingScreenState extends State<RingingScreen>
   }
 
   void _startSelection() {
+    final winner = _winner;
+    if (winner == null || _cyclePool.isEmpty) return;
+
     var step = 0;
     const totalSteps = 22;
 
@@ -87,7 +136,7 @@ class _RingingScreenState extends State<RingingScreen>
 
       setState(() {
         if (step >= totalSteps - 1) {
-          _cycleIndex = _cyclePool.indexWhere((i) => i.name == _winner.name);
+          _cycleIndex = _cyclePool.indexWhere((i) => i.name == winner.name);
           if (_cycleIndex < 0) _cycleIndex = 0;
         } else {
           _cycleIndex = (_cycleIndex + 1) % _cyclePool.length;
@@ -114,7 +163,23 @@ class _RingingScreenState extends State<RingingScreen>
       PageRouteBuilder(
         pageBuilder: (_, anim, __) => CameraScreen(
           alarmId: widget.alarmId,
-          targetItem: _winner,
+          targetItem: _winner!,
+        ),
+        transitionsBuilder: (_, anim, __, child) => FadeTransition(
+          opacity: anim,
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  void _proceedToSitups() {
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (_, anim, __) => SitupScreen(
+          alarmId: widget.alarmId,
+          targetCount: _situpTarget,
         ),
         transitionsBuilder: (_, anim, __, child) => FadeTransition(
           opacity: anim,
@@ -163,7 +228,11 @@ class _RingingScreenState extends State<RingingScreen>
                   Expanded(
                     child: _revealed
                         ? _buildReveal()
-                        : _buildSelectingAnimation(),
+                        : (_useSitups
+                            ? _buildSitupIntro()
+                            : (_cyclePool.isEmpty
+                                ? _buildChallengeLoading()
+                                : _buildSelectingAnimation())),
                   ),
                   if (_revealed) _buildActionButton(),
                   const SizedBox(height: 24),
@@ -217,7 +286,9 @@ class _RingingScreenState extends State<RingingScreen>
             const SizedBox(height: 8),
             Text(
               _revealed
-                  ? 'Find this object to stop the alarm'
+                  ? (_useSitups
+                      ? 'Do hip bends to stop the alarm'
+                      : 'Find this object to stop the alarm')
                   : 'Picking your challenge...',
               style: const TextStyle(
                 fontSize: 14,
@@ -231,7 +302,22 @@ class _RingingScreenState extends State<RingingScreen>
     );
   }
 
+  Widget _buildChallengeLoading() {
+    return const Center(
+      child: SizedBox(
+        width: 36,
+        height: 36,
+        child: CircularProgressIndicator(color: AppTheme.accent),
+      ),
+    );
+  }
+
   Widget _buildSelectingAnimation() {
+    if (_cyclePool.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppTheme.accent),
+      );
+    }
     final current = _cyclePool[_cycleIndex];
 
     return Column(
@@ -344,6 +430,56 @@ class _RingingScreenState extends State<RingingScreen>
     );
   }
 
+  Widget _buildSitupIntro() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 160,
+          height: 160,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppTheme.accent.withOpacity(0.07),
+            border: Border.all(color: AppTheme.accent.withOpacity(0.25), width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.accent.withOpacity(0.10),
+                blurRadius: 28,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: const Center(
+            child: Icon(
+              Icons.sports_gymnastics_rounded,
+              size: 72,
+              color: AppTheme.accentSecondary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 22),
+        Text(
+          'HIP BENDS',
+          style: TextStyle(
+            fontSize: 36,
+            fontWeight: FontWeight.w900,
+            color: AppTheme.textPrimary,
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Do $_situpTarget hip bends to stop the alarm',
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppTheme.textSecondary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
   Widget _buildReveal() {
     return AnimatedBuilder(
       animation: _revealAnim,
@@ -379,15 +515,15 @@ class _RingingScreenState extends State<RingingScreen>
                 ),
                 child: Center(
                   child: Text(
-                    _winner.emoji,
+                    _useSitups ? '💪' : _winner!.emoji,
                     style: const TextStyle(fontSize: 88),
                   ),
                 ),
               ),
               const SizedBox(height: 28),
-              const Text(
-                'FIND THIS',
-                style: TextStyle(
+              Text(
+                _useSitups ? 'DO HIP BENDS' : 'FIND THIS',
+                style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                   color: AppTheme.danger,
@@ -396,7 +532,7 @@ class _RingingScreenState extends State<RingingScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                _winner.name,
+                _useSitups ? '$_situpTarget HIP BENDS' : _winner!.name,
                 style: const TextStyle(
                   fontSize: 34,
                   fontWeight: FontWeight.w900,
@@ -418,9 +554,11 @@ class _RingingScreenState extends State<RingingScreen>
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
-          onPressed: _proceedToCamera,
-          icon: const Icon(Icons.camera_alt_rounded, size: 22),
-          label: const Text('TAKE PHOTO'),
+          onPressed: _useSitups ? _proceedToSitups : _proceedToCamera,
+          icon: _useSitups
+              ? const Icon(Icons.sports_gymnastics_rounded, size: 22)
+              : const Icon(Icons.camera_alt_rounded, size: 22),
+          label: Text(_useSitups ? 'DO $_situpTarget HIP BENDS' : 'TAKE PHOTO'),
           style: ElevatedButton.styleFrom(
             backgroundColor: AppTheme.danger,
             foregroundColor: Colors.white,

@@ -27,6 +27,8 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
   late TextEditingController _labelController;
   late bool _vibrate;
   late int _minAttemptsBeforeSkip;
+  // 0 = Object detection, 1 = Sit-ups
+  late int _challengeMode;
   final _storage = AlarmStorageService();
 
   @override
@@ -42,6 +44,8 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
     _vibrate = widget.existing?.vibrate ?? true;
     _minAttemptsBeforeSkip = widget.existing?.minAttemptsBeforeSkip ??
         AppConstants.defaultMinAttemptsBeforeSkip;
+    final situpsEnabled = widget.existing?.situpsEnabled ?? false;
+    _challengeMode = situpsEnabled ? 1 : 0;
   }
 
   @override
@@ -67,6 +71,8 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
       repeatDays: _repeatDays,
       vibrate: _vibrate,
       minAttemptsBeforeSkip: _minAttemptsBeforeSkip,
+      objectDetectionEnabled: _challengeMode == 0,
+      situpsEnabled: _challengeMode == 1,
     );
     Navigator.pop(context, AlarmEditorResult.save(alarm));
   }
@@ -191,6 +197,32 @@ class _AddAlarmScreenState extends State<AddAlarmScreen> {
                     'Vibrate',
                     _vibrate,
                     (v) => setState(() => _vibrate = v),
+                  ),
+                  const SizedBox(height: 20),
+                  _sectionLabel('Dismissal challenge'),
+                  const SizedBox(height: 12),
+                  ToggleButtons(
+                    isSelected: [
+                      _challengeMode == 0,
+                      _challengeMode == 1,
+                    ],
+                    onPressed: (index) {
+                      setState(() => _challengeMode = index);
+                    },
+                    borderRadius: BorderRadius.circular(14),
+                    constraints: const BoxConstraints(
+                      minHeight: 48,
+                      minWidth: 170,
+                    ),
+                    selectedColor: AppTheme.background,
+                    fillColor:
+                        AppTheme.accentSecondary.withValues(alpha: 0.30),
+                    color: AppTheme.textSecondary,
+                    renderBorder: true,
+                    children: const [
+                      Text('Object detection'),
+                      Text('Sit-ups'),
+                    ],
                   ),
                 ],
               ),
